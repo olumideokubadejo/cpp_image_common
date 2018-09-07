@@ -6,7 +6,6 @@
 #include "point.hpp"
 #include "policy.hpp"
 
-
 using namespace common::image;
 using namespace common::collection;
 namespace common::iterator {
@@ -162,111 +161,111 @@ class Iterator : public CursorType {
   using ImplicitCursorType = CursorType;
   using OffsetType = typename CursorType::OffsetType;
   using BoundingBoxType = typename CursorType::BoundingBoxType;
-  using PointType = Point<dimension, ValueType, ImagePolicyType>;
+  using PointType = Point<dimension, ValueType>;
   using ImageType =
       image::Image<dimension, ValueType, ImagePolicyType, PointType>;
 
-  Iterator(BoundingBoxType& bbox, ImageType* i_image)
+  Iterator(BoundingBoxType& bbox, ImageType& i_image)
       : CursorType(bbox), image(i_image) {}
-  void moveBackward() { CursorType::toPreviousPoint(); }
+  constexpr void moveBackward() { CursorType::toPreviousPoint(); }
 
-  void moveForward() { CursorType::toNextPoint(); }
+  constexpr void moveForward() { CursorType::toNextPoint(); }
 
-  void begin() { CursorType::toBegin(); }
+  constexpr void begin() { CursorType::toBegin(); }
 
-  bool isEnd() { return CursorType::isEnd(); }
+  constexpr bool isEnd() { return CursorType::isEnd(); }
 
   void operator++() { CursorType::toNextPoint(); }
 
   void operator--() { CursorType::toPreviousPoint(); }
 
-  template <class T, class ReturnType = ValueType>
-  auto applyFunction(std::function<ReturnType(T)> function) {
-    if constexpr (std::is_same<T, typename PointType::Pointer>::value) {
-      return function(getPoint());
-    } else {
-      return function(getValue());
+  constexpr void applyFunction(
+      std::function<void(std::shared_ptr<PointType>)> function) {
+    begin();
+    while (!isEnd()) {
+      function(getPoint());
+
+      moveForward();
     }
   }
 
-  OffsetType getOffset() { return CursorType::current_offset; }
+  constexpr OffsetType getOffset() { return CursorType::current_offset; }
 
-  auto getPoint() {
-    return image->template getValue<OffsetType, PointType>(getOffset());
+  constexpr auto getPoint() {
+    return image.template getValue<OffsetType, PointType>(getOffset());
   }
 
-  auto getValue() { return image->getValue(getOffset()); }
+  constexpr auto getValue() { return image.getValue(getOffset()); }
 
  protected:
-  ImageType* image;
+  ImageType image;
 };
 
 template <size_t dimension,
           class ValueType,
           class ImagePolicyType = ImagePolicy<dimension>,
-          class PointType = Point<dimension, ValueType>,
           class CursorType = CursorWithoutBoundsCheck<dimension>,
           class NeighbourhoodCursorType = CursorWithBoundsCheck<dimension>,
           class InternalIteratorType = Iterator<dimension, ValueType>>
 class NeighbourhoodIterator : public InternalIteratorType {
  public:
-  using PointPointerType = typename PointType::PointerType;
-  using IndexType = typename PointType::IndexType;
-  using OffsetType = typename PointType::OffsetType;
+  using IndexType = typename InternalIteratorType::PointType::IndexType;
+  using OffsetType = typename InternalIteratorType::PointType::OffsetType;
+
+  using PointType = typename InternalIteratorType::PointType;
   using BoundingBoxType = typename InternalIteratorType::BoundingBoxType;
   using ImageType = typename InternalIteratorType::ImageType;
 
-  void beginNeighbourhood() {
+  constexpr void beginNeighbourhood() {
     n_cursor = std::make_unique<NeighbourhoodCursorType>(
         getLocalisedBoundingBox(),
-        InternalIteratorType::image->getOffsetTable());
+        InternalIteratorType::image.getOffsetTable());
     n_cursor->toBegin();
   }
-  bool isNeighbourhoodEnd() { return n_cursor->isEnd(); }
-  void moveNeighbourhoodForward() { n_cursor->toNextPoint(); }
-  void moveNeighbourhoodBackward() { n_cursor->toPreviousPoint(); }
+  constexpr bool isNeighbourhoodEnd() { return n_cursor->isEnd(); }
+  constexpr void moveNeighbourhoodForward() { n_cursor->toNextPoint(); }
+  constexpr void moveNeighbourhoodBackward() { n_cursor->toPreviousPoint(); }
 
-  auto getNeighbourhoodOffset() { return n_cursor->current_offset; }
+  constexpr auto getNeighbourhoodOffset() { return n_cursor->current_offset; }
 
   NeighbourhoodIterator(BoundingBoxType& bbox,
-                        ImageType* i_image,
+                        ImageType& i_image,
                         size_t n_radius)
       : InternalIteratorType(bbox, i_image), neighbourhood_radius(n_radius) {}
 
-  auto getNeighbourhoodPoint() {
-    return InternalIteratorType::image
-        ->template getValue<OffsetType, PointType>(getNeighbourhoodOffset());
+  constexpr auto getNeighbourhoodPoint() {
+    return InternalIteratorType::image.template getValue<OffsetType, PointType>(
+        getNeighbourhoodOffset());
   }
 
-  auto getNeighbourhoodIndex() {
+  constexpr auto getNeighbourhoodIndex() {
     return ImagePolicyType::convertOffsetToIndex(CursorType::offset_table,
                                                  getNeighbourhoodOffset());
   }
 
   auto getNeighbourhoodValue() {
-    return InternalIteratorType::image->getValue(getNeighbourhoodOffset());
+    return InternalIteratorType::image.getValue(getNeighbourhoodOffset());
   }
 
-  template <class T, class ReturnType = ValueType>
-  auto applyFunction(std::function<ReturnType(T, std::vector<T>)> function) {
-    if constexpr (std::is_same<T, PointPointerType>::value) {
-      return function(InternalIteratorType::getPoint(),
-                      getNeighbours<PointPointerType>());
-    } else {
-      return function(InternalIteratorType::getValue(),
-                      getNeighbours<ValueType>());
+  void applyFunction(
+      std::function<void(std::shared_ptr<PointType>,
+                         std::vector<std::shared_ptr<PointType>>)> function) {
+    this->begin();
+    while (!this->isEnd()) {
+      function(InternalIteratorType::getPoint(), getNeighbours());
+
+      this->moveForward();
     }
   }
 
-  template <class ReturnType>
-  std::vector<ReturnType> getNeighbours() {
+  auto getNeighbours() {
     beginNeighbourhood();
-    std::vector<ReturnType> neighbours;
+    std::vector<std::shared_ptr<PointType>> neighbours;
     n_cursor->toBegin();
     while (!isNeighbourhoodEnd()) {
-      auto val = InternalIteratorType::image
-                     ->template getValue<OffsetType, ReturnType>(
-                         getNeighbourhoodOffset());
+      auto val =
+          InternalIteratorType::image.template getValue<OffsetType, PointType>(
+              getNeighbourhoodOffset());
       neighbours.push_back(val);
       moveNeighbourhoodForward();
     }
@@ -282,7 +281,6 @@ class NeighbourhoodIterator : public InternalIteratorType {
     bb.fill(0);
     auto index = ImagePolicyType::convertOffsetToIndex(
         CursorType::offset_table, CursorType::current_offset);
-    // std::cout << CursorType::current_offset << '\n';
 
     for (size_t i = 0; i < dimension; i++) {
       bb[i] = int(index[i]) - int(neighbourhood_radius) < 0

@@ -18,8 +18,6 @@ struct ArrayObject {
   ArrayObject() {}
   internal_type value;
   internal_point_type& operator[](const size_t index) noexcept {
-    // static_assert(index<dimension, "The index has to be less than the
-    // dimension");
     return value[index];
   }
 
@@ -64,8 +62,7 @@ struct ArrayObject {
     type arr;
     std::set_difference(value.begin(), value.end(), comp.value.begin(),
                         comp.value.end(), arr.value.begin());
-    // auto v = ranges::view::set_difference(value, comp.value);
-    // ranges::copy(v, arr.value);
+
     return arr;
   }
 
@@ -112,5 +109,24 @@ struct isSameArrayType {
   using type = bool;
 };
 }  // namespace common::collection::detail
+
+/**
+ *
+ * Functions that operate on an array block
+ *
+ */
+
+namespace common::collection::functions {
+template <size_t N, size_t... Is>
+auto arrayAsTuple(common::collection::ArrayObject<size_t, N>& arr,
+                  std::index_sequence<Is...>) {
+  return std::make_tuple(size_t{arr.value[Is]}...);
+}
+template <size_t N>
+auto arrayAsTuple(common::collection::ArrayObject<size_t, N>& arr) {
+  auto Is = std::make_index_sequence<N>{};
+  return arrayAsTuple(arr, Is);
+}
+}  // namespace common::collection::functions
 
 /* =======  End of Ostream for ArrayObject  ======= */

@@ -45,7 +45,6 @@ class Image : public OISPolicyType {
 
   template <typename Type, typename ReturnType = ValueType>
   constexpr auto getValue(Type location) {
-    std::lock_guard<std::mutex> guard(data_mutex);
     if constexpr (std::is_same<Type, OffsetType>::value) {
       return getPoint<ReturnType>(location);
     } else if constexpr (std::is_same<Type, IndexType>::value) {
@@ -54,6 +53,10 @@ class Image : public OISPolicyType {
     }
   }
   auto getOffsetTable() const { return offset_table; }
+
+  constexpr auto getSize() const { return size; }
+
+  constexpr auto getData() const { return m_data; }
 
   auto getBoundingBox() {
     IndexType index{};
@@ -65,15 +68,13 @@ class Image : public OISPolicyType {
   ValueType* m_data;
   SizeType size;
   OffsetTableType offset_table;
-  std::mutex data_mutex;
 
   template <class ReturnType>
   constexpr auto getPoint(OffsetType offset) {
-    std::lock_guard<std::mutex> guard(data_mutex);
     if constexpr (std::is_same<ReturnType, ValueType>::value) {
       return (*(m_data + offset));
     } else {
-      return std::make_unique<PointType>(
+      return std::make_shared<PointType>(
           *(m_data + offset),
           OISPolicyType::convertOffsetToIndex(offset_table, offset), offset);
     }
